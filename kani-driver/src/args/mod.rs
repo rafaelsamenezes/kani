@@ -227,6 +227,15 @@ pub struct VerificationArgs {
     // consumes everything
     pub cbmc_args: Vec<OsString>,
 
+    /// Pass through directly to ESBMC. Requires `-Z esbmc`.
+    /// This feature is unstable and it requires `-Z unstable-options` to be used
+    #[arg(
+        long,
+        allow_hyphen_values = true,
+        num_args(0..)
+    )]
+    pub esbmc_args: Vec<OsString>,
+
     /// Generate concrete playback unit test.
     /// If value supplied is 'print', Kani prints the unit test to stdout.
     /// If value supplied is 'inplace', Kani automatically adds the unit test to your source code.
@@ -425,6 +434,15 @@ impl VerificationArgs {
 
     /// Assertion reachability checks should be disabled
     pub fn assertion_reach_checks(&self) -> bool {
+        // The ESBMC backend does not yet consume per-property results, so it
+        // cannot distinguish a `KANI_CHECK_ID_*` reachability marker (whose
+        // *failure* signals reachability) from a genuine assertion failure the
+        // way `cbmc_property_renderer::filter_reach_checks` does. Emitting them
+        // would make every harness report FAILED. Re-enable once the ESBMC
+        // backend parses a property table.
+        if self.common_args.unstable_features.contains(UnstableFeature::Esbmc) {
+            return false;
+        }
         !self.no_assertion_reach_checks
     }
 
@@ -791,6 +809,65 @@ impl ValidateArgs for VerificationArgs {
                     format!(
                         "Conflicting options: --cbmc-args cannot be used with {}.",
                         UnstableFeature::Lean.as_argument_string()
+                    ),
+                ));
+            }
+
+            // ESBMC backend conflicts. These are hard errors rather than warnings:
+            // silently ignoring, say, `--solver kissat` and then reporting SUCCESS
+            // is precisely the class of bug that destroys trust in a second backend.
+            if self.common_args.unstable_features.contains(UnstableFeature::Esbmc) {
+                let esbmc = UnstableFeature::Esbmc.as_argument_string();
+                let conflict = |opt: &str| {
+                    Err(Error::raw(
+                        ErrorKind::ArgumentConflict,
+                        format!("Conflicting options: {opt} is not supported with {esbmc}."),
+                    ))
+                };
+                if !self.cbmc_args.is_empty() {
+                    return conflict("--cbmc-args");
+                }
+                if self.common_args.unstable_features.contains(UnstableFeature::Lean) {
+                    return conflict(&UnstableFeature::Lean.as_argument_string());
+                }
+                if self.concrete_playback.is_some() {
+                    return conflict("--concrete-playback");
+                }
+                if self.coverage {
+                    return conflict("--coverage");
+                }
+                if self.extra_pointer_checks {
+                    return conflict("--extra-pointer-checks");
+                }
+                // Loop contracts replace unwinding with an invariant. Skipping
+                // `--apply-loop-contracts` would silently switch the harness to
+                // bounded unwinding without unwinding assertions.
+                if self.common_args.unstable_features.contains(UnstableFeature::LoopContracts) {
+                    return conflict(&UnstableFeature::LoopContracts.as_argument_string());
+                }
+                // SAT solver selection has no ESBMC equivalent.
+                if let Some(solver) = &self.solver {
+                    use kani_metadata::CbmcSolver;
+                    if !matches!(
+                        solver,
+                        CbmcSolver::Bitwuzla | CbmcSolver::Z3 | CbmcSolver::Cvc5 | CbmcSolver::Cadical
+                    ) {
+                        return Err(Error::raw(
+                            ErrorKind::ArgumentConflict,
+                            format!(
+                                "Conflicting options: `--solver {}` is not supported with \
+                                 {esbmc}. Supported solvers: bitwuzla, z3, cvc5.",
+                                solver.as_ref()
+                            ),
+                        ));
+                    }
+                }
+            } else if !self.esbmc_args.is_empty() {
+                return Err(Error::raw(
+                    ErrorKind::ArgumentConflict,
+                    format!(
+                        "Conflicting options: --esbmc-args requires {}.",
+                        UnstableFeature::Esbmc.as_argument_string()
                     ),
                 ));
             }

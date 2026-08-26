@@ -46,7 +46,23 @@ impl KaniSession {
         self.instrument_contracts(harness, is_loop_contracts_enabled, output)?;
 
         if self.args.checks.undefined_function_on() {
-            self.add_library(output)?;
+            // `--add-library` serialises CBMC's C model library into the binary.
+            // ESBMC cannot consume it: the library pulls in `__CPROVER_DYNAMIC_OBJECT`,
+            // which its CBMC adapter declines, and the pass is redundant there anyway
+            // because ESBMC synthesises the CPROVER additions and bridges libc itself
+            // when it detects a CBMC goto-binary.
+            //
+            // This is the one pass that differs between the two backends; every other
+            // step of `instrument_model` is shared, which keeps the two pipelines
+            // comparable for differential testing.
+            if !self
+                .args
+                .common_args
+                .unstable_features
+                .contains(kani_metadata::UnstableFeature::Esbmc)
+            {
+                self.add_library(output)?;
+            }
             self.undefined_functions(output)?;
         } else {
             self.just_drop_unused_functions(output)?;

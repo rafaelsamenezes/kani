@@ -75,6 +75,8 @@ pub enum UnstableFeature {
     ConcretePlayback,
     /// Allow Kani to link against C code.
     CFfi,
+    /// Verify with ESBMC instead of CBMC.
+    Esbmc,
     /// Kani APIs related to floating-point operations (e.g. `float_to_int_in_range`)
     FloatLib,
     /// Enable function contracts [RFC 9](https://model-checking.github.io/kani/rfc/rfcs/0009-function-contracts.html)

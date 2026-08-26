@@ -204,7 +204,13 @@ impl KaniSession {
             println!("{msg}");
         }
 
-        let mut result = self.with_timer(|| self.run_cbmc(binary, harness), "run_cbmc")?;
+        let mut result = if self.args.common_args.unstable_features.contains(
+            kani_metadata::UnstableFeature::Esbmc,
+        ) {
+            self.with_timer(|| self.run_esbmc(binary, harness), "run_esbmc")?
+        } else {
+            self.with_timer(|| self.run_cbmc(binary, harness), "run_cbmc")?
+        };
 
         self.process_output(&result, harness, thread_index);
         self.gen_and_add_concrete_playback(harness, &mut result)?;

@@ -24,6 +24,7 @@ mod args_toml;
 mod autoharness;
 mod call_cargo;
 mod call_cbmc;
+mod call_esbmc;
 mod call_goto_cc;
 mod call_goto_instrument;
 mod call_goto_synthesizer;
