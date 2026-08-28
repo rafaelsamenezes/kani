@@ -71,10 +71,18 @@ impl KaniSession {
         args.push("--binary".into());
         args.push(file.to_owned().into_os_string());
 
-        // Mandatory. Without it ESBMC verifies the synthesised boilerplate `main`
-        // and reports a vacuous SUCCESSFUL.
-        args.push("--function".into());
-        args.push(harness.mangled_name.as_str().into());
+        // Deliberately NOT passing `--function <harness>`.
+        //
+        // Kani emits one goto binary per harness, and CBMC has already generated
+        // that binary's `__CPROVER__start` to run `__CPROVER_initialize` and then
+        // call this harness. ESBMC bridges its synthesised `__ESBMC_main` onto
+        // `__CPROVER__start` on its own, so the harness is still the entry point.
+        //
+        // `--function` instead retargets straight at the harness body, which skips
+        // `__CPROVER_initialize` entirely: every `static` is then read as
+        // uninitialised, so constants read as nondet and vtables dispatch into
+        // Kani's `undefined function should be unreachable` stubs. That produced
+        // several hundred spurious counterexamples across `tests/kani`.
 
         // Kani already emits Rust-semantics checks into the goto model, and ESBMC
         // runs its own goto_check over the loaded binary. Without these two the
