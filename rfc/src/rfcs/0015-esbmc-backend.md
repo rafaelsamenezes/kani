@@ -127,6 +127,22 @@ Two consequences:
 
 Caching the compiled additions instead of rebuilding them per run is therefore the highest-value performance work available, and it is ESBMC-side
 
+## Software Design
+
+*Left empty for version 0, per the RFC template. To be filled in as a later revision during implementation.*
+
+## Rationale and alternatives
+
+**Why a flag rather than a separate tool?** Reusing Kani's frontend is the entire point. A standalone "ESBMC for Rust" would re-solve MIR-to-goto codegen and would not give the differential signal, because the two tools would no longer be verifying the same model.
+
+**Why consume the goto binary rather than emit ESBMC's IR?** ESBMC already reads CBMC goto binaries. Reusing that path means Kani emits nothing new, and any future Kani codegen change is picked up by both backends automatically.
+
+**Why not bundle ESBMC?** Bundling commits Kani to a version pin, a build, and a distribution story for a second large C++ dependency. Requiring it on `PATH` is right for an unstable feature; the question should be revisited at stabilization.
+
+**Impact of not doing this.** Kani remains single-engine, and the class of bugs where CBMC and Kani are jointly wrong stays invisible.
+
+**Precedent.** `-Z lean` established that an alternative backend can live behind an unstable flag, and `args/mod.rs` already carries a `// TODO: error out for other CBMC-backend-specific arguments`, so the possibility of non-CBMC backends is anticipated in the codebase.
+
 ## Open questions
 
 These must be resolved before stabilization.
